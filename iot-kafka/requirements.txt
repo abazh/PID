@@ -1,0 +1,5 @@
+# Python dependencies for local development (optional)
+# Use these if you want to run publisher/consumer/bridge locally instead of containers.
+
+kafka-python-ng==2.0.2
+paho-mqtt==1.6.1

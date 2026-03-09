@@ -1,0 +1,102 @@
+version: "3.8"
+
+services:
+  zookeeper:
+    image: bitnamilegacy/zookeeper:3.9
+    environment:
+      - ALLOW_ANONYMOUS_LOGIN=yes
+    ports:
+      - "2181:2181"
+
+  kafka:
+    image: bitnamilegacy/kafka:3.7
+    depends_on: [zookeeper]
+    ports:
+      - "9092:9092"
+    environment:
+      - KAFKA_CFG_ZOOKEEPER_CONNECT=zookeeper:2181
+      # listeners (external + internal)
+      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,PLAINTEXT_INTERNAL://:29092
+      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://localhost:9092,PLAINTEXT_INTERNAL://kafka:29092
+      # 🔧 tell Kafka what each listener's protocol is
+      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=PLAINTEXT:PLAINTEXT,PLAINTEXT_INTERNAL:PLAINTEXT
+      # use the internal listener for inter-broker traffic (even if single-broker, this avoids warnings)
+      - KAFKA_CFG_INTER_BROKER_LISTENER_NAME=PLAINTEXT_INTERNAL
+      # optional but nice to be explicit
+      - KAFKA_CFG_BROKER_ID=1
+      - ALLOW_PLAINTEXT_LISTENER=yes
+
+  ksqldb:
+    image: confluentinc/ksqldb-server:0.29.0
+    depends_on: [kafka]
+    platform: linux/amd64 # Specify the target platform here
+    ports:
+      - "8088:8088"
+    environment:
+      - KSQL_LISTENERS=http://0.0.0.0:8088
+      - KSQL_BOOTSTRAP_SERVERS=kafka:29092
+      - KSQL_KSQL_SERVICE_ID=iot_ksql_service
+      - KSQL_KSQL_STREAMS_AUTO_OFFSET_RESET=earliest
+
+  mosquitto:
+    image: eclipse-mosquitto:2
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+
+  influxdb:
+    image: influxdb:2.7
+    ports:
+      - "8086:8086"
+    environment:
+      - DOCKER_INFLUXDB_INIT_MODE=setup
+      - DOCKER_INFLUXDB_INIT_USERNAME=admin
+      - DOCKER_INFLUXDB_INIT_PASSWORD=admin123
+      - DOCKER_INFLUXDB_INIT_ORG=iot-org
+      - DOCKER_INFLUXDB_INIT_BUCKET=iot
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=iot-super-token
+    volumes:
+      - influx-data:/var/lib/influxdb2
+
+  telegraf:
+    image: telegraf:1.28
+    depends_on: [kafka, influxdb]
+    environment:
+      - INFLUX_TOKEN=iot-super-token
+    volumes:
+      - ./telegraf/telegraf.conf:/etc/telegraf/telegraf.conf:ro
+
+  grafana:
+    image: grafana/grafana:10.4.2
+    depends_on: [influxdb]
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin123
+      - INFLUX_TOKEN=iot-super-token
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+
+  bridge:
+    build: ./bridge
+    depends_on: [kafka, mosquitto]
+    environment:
+      - BOOTSTRAP=kafka:29092
+      - TOPIC_KAFKA=iot.sensors
+      - BROKER_MQTT=mosquitto
+      - TOPIC_MQTT=sensors/+/metrics
+
+  producer:
+    build: ./producer
+    depends_on: [kafka]
+    environment:
+      - BOOTSTRAP=kafka:29092
+      - TOPIC=iot.sensors
+
+volumes:
+  influx-data:
+  grafana-data:

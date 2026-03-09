@@ -1,0 +1,80 @@
+{
+  "id": null,
+  "uid": "iot-main",
+  "title": "IoT Sensors Overview",
+  "timezone": "browser",
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "Temperature by device",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 18,
+        "h": 9
+      },
+      "datasource": {
+        "type": "influxdb",
+        "uid": "InfluxDB-v2"
+      },
+      "targets": [
+        {
+          "query": "from(bucket: \"iot\") |> range(start: -30m) |> filter(fn: (r) => r._measurement == \"iot_sensors\") |> filter(fn: (r) => r._field == \"temperature\") |> group(columns: [\"device_id\"])"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Min Battery (last 30m)",
+      "gridPos": {
+        "x": 18,
+        "y": 0,
+        "w": 6,
+        "h": 9
+      },
+      "datasource": {
+        "type": "influxdb",
+        "uid": "InfluxDB-v2"
+      },
+      "targets": [
+        {
+          "query": "from(bucket: \"iot\") |> range(start: -30m) |> filter(fn: (r) => r._measurement == \"iot_sensors\") |> filter(fn: (r) => r._field == \"battery\") |> min()"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "orientation": "horizontal",
+        "textMode": "value"
+      }
+    },
+    {
+      "type": "table",
+      "title": "Raw Sensor Records (last 10m)",
+      "gridPos": {
+        "x": 0,
+        "y": 9,
+        "w": 24,
+        "h": 10
+      },
+      "datasource": {
+        "type": "influxdb",
+        "uid": "InfluxDB-v2"
+      },
+      "targets": [
+        {
+          "query": "from(bucket: \"iot\") |> range(start: -10m) |> filter(fn: (r) => r._measurement == \"iot_sensors\")"
+        }
+      ],
+      "options": {
+        "showHeader": true
+      }
+    }
+  ],
+  "schemaVersion": 37,
+  "version": 1
+}
